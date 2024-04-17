@@ -1,8 +1,9 @@
 ## Self-training
 
 # Iteration: 1
-# Algorithm: SVM
+# Algorithm: Logistic regression
 # Word embeddings dimensions: 100
+# Class weights
 
 packages <- c("tidyverse", "tidymodels", "readxl", "ROSE", "recipes", "textrecipes",
               "e1071", "caret", "glmnet", "spacyr", "textdata", "xgboost", "data.table")
@@ -27,73 +28,122 @@ no_we <- no_we |>
   as_tibble()
 
 ################################################################################
-covid <- readRDS("D:/Data/Training samples/misinformation_labeled.RDS")
-train <- readRDS("D:/Data/manual_links_TRAIN.RDS")
-test <- readRDS("D:/Data/manual_links_TEST.RDS")
-stopwords <- read_xlsx("~/INORK_R/Processing/stopwords.xlsx")
+covid <- readRDS("E:/Data/Training samples/misinformation_labeled.RDS")
+
+stopwords <- read_xlsx("~/INORK/Processing/stopwords.xlsx")
 custom_words <- stopwords |>
   pull(word)
 
-train |>
-  count(label) # misinfo = 775, non misinfo = 776
+covid <- covid |>
+  select(tweet = text, label, id)
 
-covid_recipe <- recipe(label~tweet, data = train) |>
+covid$label <- case_when(
+  covid$label == 0 ~ "non.misinfo",
+  covid$label == 1 ~ "misinfo"
+)
+covid$label <- as.factor(covid$label)
+
+set.seed(1234)
+covid_split <- initial_split(covid, prop = 0.8, strata = label)
+train <- training(covid_split)
+test <- testing(covid_split)
+
+train |>
+  count(label) # misinfo = 65, non misinfo = 776
+
+################################################################################
+841/(table(train$label)[1] * 2) # 0.5418814 
+841/(table(train$label)[2] * 2) # 6.469231 
+
+train <- train |>
+  mutate(case_wts = ifelse(label == "misinfo", 6.469231, 0.5418814),
+         case_wts = importance_weights(case_wts))
+
+################################################################################
+## Logistic regression
+set.seed(8008)
+folds <- vfold_cv(train, strata = label, v = 5, repeats = 2)
+cls_metric <- metric_set(yardstick::precision, yardstick::recall, yardstick::f_meas)
+
+train <- train |>
+  mutate(case_wts = ifelse(label == "misinfo", 6.469231, 0.541184),
+         case_wts = importance_weights(case_wts))
+
+model_recipe <- recipe(label~tweet+case_wts, data = train) |>
   step_tokenize(tweet, engine = "spacyr") |>
   step_stopwords(tweet, language = "no", keep = FALSE, 
                  stopword_source = "snowball", 
                  custom_stopword_source = custom_words) |>
   step_lemma(tweet) |>
   step_word_embeddings(tweet, embeddings = no_we) |>
-  step_normalize(all_numeric_predictors()) |>
-  prep()
+  step_normalize(all_numeric_predictors())
 
-new_train <- bake(covid_recipe, new_data = train)
-new_test <- bake(covid_recipe, new_data = test)
+lr_spec <- logistic_reg(penalty = tune(), mixture = 1) |>
+  set_mode("classification") |>
+  set_engine("glmnet")
 
-set.seed(1234)
-svm_model <- svm(formula = label~.,
-                 data = new_train,
-                 type = "C-classification",
-                 kernel = "radial",
-                 cross = 5,
-                 probability = TRUE)
+lr_workf <- workflow() |>
+  add_model(lr_spec) |>
+  add_recipe(model_recipe) |>
+  add_case_weights(case_wts)
 
-model_svm <- new_test |>
-  bind_cols(predict(svm_model, new_test))
+set.seed(13)
+grid <- tibble(penalty = 10^seq(-3, 0, length.out = 20))
 
-cm_svm <- confusionMatrix(table(new_test$label, model_svm$...102))
-cm_svm$byClass["F1"] # 0.1621622   
-cm_svm$byClass["Precision"] # 0.375 
-cm_svm$byClass["Recall"] # 0.1034483 
+set.seed(1)
+lr_res <- lr_workf |>
+  tune_grid(resamples = folds, grid = grid, metrics = cls_metric)
+
+lr_params <- select_best(lr_res, metric = "f_meas")
+
+set.seed(345)
+lr_final_workf <- lr_workf |>
+  finalize_workflow(lr_params)
+
+set.seed(2)
+lr_final_fit <- fit(lr_final_workf, train)
+
+lr_preds <- test |>
+  bind_cols(predict(lr_final_fit, test))
+
+cm_lr <- confusionMatrix(table(test$label, lr_preds$.pred_class)) 
+cm_lr$byClass["F1"] # 0.1538462    
+cm_lr$byClass["Precision"] # 0.375  
+cm_lr$byClass["Recall"] # 0.09677419 
+
+lr_preds |>
+  conf_mat(truth = label, estimate = .pred_class) |> 
+  autoplot(type = "heatmap") 
 
 ################################################################################
-covid_df <- readRDS("D:/Data/covid_processed.RDS")
-
+covid_df <- readRDS("E:/Data/covid_processed.RDS")
 match <- subset(covid, (covid$id %in% covid_df$id))
 covid_df <- covid_df |>
-  anti_join(match, by = "id") |>
+#  anti_join(match, by = "id") |>
   rename(tweet = text)
 
 set.seed(89)
-svm_preds_all <- covid_df |>
-  bind_cols(predict(svm_model, covid_df, type = "prob"))
+lr_preds_all <- covid_df |>
+  bind_cols(predict(lr_final_fit, covid_df, type = "prob"))
 
-svm_preds_all_all_filtered <- svm_preds_all |>
-  filter(.pred_misinfo > 0.95 | .pred_non.misinfo > 0.95)
+lr_preds_all_filtered <- lr_preds_all |>
+  filter(.pred_misinfo > 0.98 | .pred_non.misinfo > 0.98)
 
-svm_preds_all_filtered_label <- svm_preds_all_filtered |>
+lr_preds_all_filtered_label <- lr_preds_all_filtered |>
   mutate(label = case_when(
-    .pred_misinfo > 0.95 ~ "misinfo",
-    .pred_non.misinfo > 0.95 ~ "non.misinfo"
+    .pred_misinfo > 0.98 ~ "misinfo",
+    .pred_non.misinfo > 0.98 ~ "non.misinfo"
   ))
 
-svm_preds_all_filtered_label <- svm_preds_all_filtered_label |>
+lr_preds_all_filtered_label <- lr_preds_all_filtered_label |>
   select(tweet, label, id)
 
-svm_preds_all_filtered_label |>
+lr_preds_all_filtered_label |>
   count(label)
 
-covid_predicted <- rbind(covid, svm_preds_all_filtered_label)
+covid_predicted <- rbind(covid, lr_preds_all_filtered_label)
 
 covid_predicted |>
   count(label)
+
+saveRDS(covid_predicted, "E:/Data/Training samples/misinformation_class_1.RDS")
