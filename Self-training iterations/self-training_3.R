@@ -1,6 +1,6 @@
 ## Self-training
 
-# Iteration: 1
+# Iteration: 3
 # Algorithm: Logistic regression
 # Word embeddings dimensions: 100
 # Class weights
@@ -28,19 +28,12 @@ no_we <- no_we |>
   as_tibble()
 
 ################################################################################
-covid <- readRDS("E:/Data/Training samples/misinformation_labeled.RDS")
+covid <- readRDS("E:/Data/Training samples/misinformation_class_2.RDS")
 
 stopwords <- read_xlsx("~/INORK/Processing/stopwords.xlsx")
 custom_words <- stopwords |>
   pull(word)
 
-covid <- covid |>
-  select(tweet = text, label, id)
-
-covid$label <- case_when(
-  covid$label == 0 ~ "non.misinfo",
-  covid$label == 1 ~ "misinfo"
-)
 covid$label <- as.factor(covid$label)
 
 set.seed(1234)
@@ -49,14 +42,14 @@ train <- training(covid_split)
 test <- testing(covid_split)
 
 train |>
-  count(label) # misinfo = 65, non misinfo = 776
+  count(label) # misinfo = 2848, non misinfo = 46306
 
 ################################################################################
-841/(table(train$label)[1] * 2) # 0.5418814 
-841/(table(train$label)[2] * 2) # 6.469231 
+49154/(table(train$label)[1] * 2) #   
+49154/(table(train$label)[2] * 2) #   
 
 train <- train |>
-  mutate(case_wts = ifelse(label == "misinfo", 6.469231, 0.5418814),
+  mutate(case_wts = ifelse(label == "misinfo", 8.629565, 0.530752),
          case_wts = importance_weights(case_wts))
 
 ################################################################################
@@ -102,20 +95,21 @@ lr_final_fit <- fit(lr_final_workf, train)
 lr_preds <- test |>
   bind_cols(predict(lr_final_fit, test))
 
-cm_lr <- confusionMatrix(table(test$label, lr_preds$.pred_class)) 
-cm_lr$byClass["F1"] # 0.1538462    
-cm_lr$byClass["Precision"] # 0.375  
-cm_lr$byClass["Recall"] # 0.09677419 
+cm_lr <- confusionMatrix(table(test$label, lr_preds$.pred_class), positive = "misinfo") 
+cm_lr$byClass["F1"] # 0.9689704     
+cm_lr$byClass["Precision"] # 0.9927746   
+cm_lr$byClass["Recall"] # 0.946281  
 
 lr_preds |>
   conf_mat(truth = label, estimate = .pred_class) |> 
   autoplot(type = "heatmap") 
 
+# saveRDS(lr_final_fit, "~/INORK_ST/log_reg_round_3.RDS")
 ################################################################################
 covid_df <- readRDS("E:/Data/covid_processed.RDS")
 match <- subset(covid, (covid$id %in% covid_df$id))
 covid_df <- covid_df |>
-#  anti_join(match, by = "id") |>
+  #  anti_join(match, by = "id") |>
   rename(tweet = text)
 
 set.seed(89)
@@ -135,7 +129,7 @@ lr_preds_all_filtered_label <- lr_preds_all_filtered_label |>
   select(tweet, label, id)
 
 lr_preds_all_filtered_label |>
-  count(label) # misinfo = 3469, nonmisinfo = 57 046
+  count(label) # misinfo = 6361, nonmisinfo = 64 408
 
 covid_predicted <- full_join(lr_preds_all_filtered_label, covid, by = "id") |>
   mutate(label = coalesce(label.x, label.y),
@@ -143,6 +137,6 @@ covid_predicted <- full_join(lr_preds_all_filtered_label, covid, by = "id") |>
   select(tweet, label, id)
 
 covid_predicted |>
-  count(label) # misinfo = 3540, nonmisinfo = 57 903
+  count(label) # misinfo = 7035, nonmisinfo = 78 032
 
-saveRDS(covid_predicted, "E:/Data/Training samples/misinformation_class_1.RDS")
+saveRDS(covid_predicted, "E:/Data/Training samples/misinformation_class_3.RDS")
