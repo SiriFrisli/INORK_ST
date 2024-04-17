@@ -28,9 +28,9 @@ no_we <- no_we |>
   as_tibble()
 
 ################################################################################
-covid <- readRDS("E:/Data/Training samples/misinformation_labeled.RDS")
+covid <- readRDS("D:/Data/Training samples/misinformation_labeled.RDS")
 
-stopwords <- read_xlsx("~/INORK/Processing/stopwords.xlsx")
+stopwords <- read_xlsx("~/INORK_R/Processing/stopwords.xlsx")
 custom_words <- stopwords |>
   pull(word)
 
@@ -64,10 +64,6 @@ train <- train |>
 set.seed(8008)
 folds <- vfold_cv(train, strata = label, v = 5, repeats = 2)
 cls_metric <- metric_set(yardstick::precision, yardstick::recall, yardstick::f_meas)
-
-train <- train |>
-  mutate(case_wts = ifelse(label == "misinfo", 6.469231, 0.541184),
-         case_wts = importance_weights(case_wts))
 
 model_recipe <- recipe(label~tweet+case_wts, data = train) |>
   step_tokenize(tweet, engine = "spacyr") |>
