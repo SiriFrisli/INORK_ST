@@ -1,6 +1,6 @@
 ## Self-training
 
-# Iteration: 3
+# Iteration: 4
 # Algorithm: Logistic regression
 # Word embeddings dimensions: 100
 # Class weights
@@ -28,7 +28,7 @@ no_we <- no_we |>
   as_tibble()
 
 ################################################################################
-covid <- readRDS("E:/Data/Training samples/misinformation_class_2.RDS")
+covid <- readRDS("E:/Data/Training samples/misinformation_class_3.RDS")
 
 stopwords <- read_xlsx("~/INORK/Processing/stopwords.xlsx")
 custom_words <- stopwords |>
@@ -139,4 +139,4 @@ covid_predicted <- full_join(lr_preds_all_filtered_label, covid, by = "id") |>
 covid_predicted |>
   count(label) # misinfo = 14509, nonmisinfo = 141762
 
-saveRDS(covid_predicted, "E:/Data/Training samples/misinformation_class_3.RDS")
+saveRDS(covid_predicted, "E:/Data/Training samples/misinformation_class_4.RDS")
