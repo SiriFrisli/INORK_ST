@@ -129,7 +129,7 @@ lr_preds_all_filtered_label <- lr_preds_all_filtered_label |>
   select(tweet, label, id)
 
 lr_preds_all_filtered_label |>
-  count(label) # misinfo = 34117, nonmisinfo = 367795
+  count(label) # misinfo = 37646, nonmisinfo = 393640
 
 covid_predicted <- full_join(lr_preds_all_filtered_label, covid, by = "id") |>
   mutate(label = coalesce(label.x, label.y),
@@ -137,6 +137,6 @@ covid_predicted <- full_join(lr_preds_all_filtered_label, covid, by = "id") |>
   select(tweet, label, id)
 
 covid_predicted |>
-  count(label) # misinfo = 34457, nonmisinfo = 373141
+  count(label) # misinfo = 38104, nonmisinfo = 400055
 
 saveRDS(covid_predicted, "E:/Data/Training samples/misinformation_class_7.RDS")
