@@ -42,14 +42,14 @@ train <- training(covid_split)
 test <- testing(covid_split)
 
 train |>
-  count(label) # misinfo = , non misinfo = 
+  count(label) # misinfo = 35 717, non misinfo = 341 684
 
 ################################################################################
-376050/(table(train$label)[1] * 2) #            
-376050/(table(train$label)[2] * 2) #           
+377401/(table(train$label)[1] * 2) # 5.283212        
+377401/(table(train$label)[2] * 2) # 0.5522661 
 
 train <- train |>
-  mutate(case_wts = ifelse(label == "misinfo", 5.349979, 0.5515466),
+  mutate(case_wts = ifelse(label == "misinfo", 5.283212, 0.5522661),
          case_wts = importance_weights(case_wts))
 
 ################################################################################
@@ -96,9 +96,9 @@ lr_preds <- test |>
   bind_cols(predict(lr_final_fit, test))
 
 cm_lr <- confusionMatrix(table(test$label, lr_preds$.pred_class), positive = "misinfo") 
-cm_lr$byClass["F1"] #          
-cm_lr$byClass["Precision"] #          
-cm_lr$byClass["Recall"] #     
+cm_lr$byClass["F1"] # 0.9941449    
+cm_lr$byClass["Precision"] # 0.9998878 
+cm_lr$byClass["Recall"] # 0.9884675 
 
 lr_preds |>
   conf_mat(truth = label, estimate = .pred_class) |> 
@@ -129,7 +129,7 @@ lr_preds_all_filtered_label <- lr_preds_all_filtered_label |>
   select(tweet, label, id)
 
 lr_preds_all_filtered_label |>
-  count(label) # misinfo = , nonmisinfo = 
+  count(label) # misinfo = 44501, nonmisinfo = 418790
 
 covid_predicted <- full_join(lr_preds_all_filtered_label, covid, by = "id") |>
   mutate(label = coalesce(label.x, label.y),
@@ -137,6 +137,6 @@ covid_predicted <- full_join(lr_preds_all_filtered_label, covid, by = "id") |>
   select(tweet, label, id)
 
 covid_predicted |>
-  count(label) # misinfo = , nonmisinfo = 
+  count(label) # misinfo = 45047, nonmisinfo = 427412
 
 saveRDS(covid_predicted, "E:/Data/Training samples/misinformation_class_13.RDS")
