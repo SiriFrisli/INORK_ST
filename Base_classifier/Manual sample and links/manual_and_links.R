@@ -78,8 +78,10 @@ covid_links$tweet <- tolower(covid_links$tweet)
 covid_links$tweet <- gsub("[[:punct:]]", " ", covid_links$tweet)
 
 covid_links <- covid_links |>
-  select(-c(dom_url, conversation_id)) |>
-  sample_n(710, seed = 321)
+  select(-c(dom_url, conversation_id)) # |>
+ # sample_n(710, seed = 321)
+
+saveRDS(covid_links, "D:/Data/covid_misinfo_links_only.RDS")
 
 train_full <- rbind(covid_links, train)
 
@@ -253,5 +255,45 @@ cm_bt$byClass["Recall"] # 0.07894737
 
 test |>
   bind_cols(predict(bt_final_fit, test)) |>
+  conf_mat(truth = label, estimate = .pred_class) |>
+  autoplot(type = "heatmap") 
+
+################################################################################
+## Random forest 
+rf_spec <- rand_forest(mtry = tune(), trees = 500, min_n = tune()) |>
+  set_mode("classification") |>
+  set_engine("ranger")
+
+rf_workf <- workflow() |>
+  add_model(rf_spec) |>
+  add_recipe(model_recipe) 
+
+set.seed(89)
+grid <- grid_latin_hypercube(min_n(), 
+                             finalize(mtry(), train), 
+                             size = 20)
+
+set.seed(1)
+rf_res <- rf_workf |>
+  tune_grid(resamples = folds, grid = grid, control = control_grid(save_pred = TRUE), metrics = cls_metric)
+
+rf_params <- select_best(rf_res, metric = "f_meas")
+
+set.seed(456)
+rf_final_workf <- rf_workf |>
+  finalize_workflow(rf_params)
+
+set.seed(2)
+rf_final_fit <- fit(rf_final_workf, train)
+
+rf_preds <- test |>
+  bind_cols(predict(rf_final_fit, test))
+
+cm_rf <- confusionMatrix(table(test$label, rf_preds$.pred_class)) 
+cm_rf$byClass["F1"] # NAs    
+cm_rf$byClass["Precision"] # 
+cm_rf$byClass["Recall"] #  
+
+rf_preds |>
   conf_mat(truth = label, estimate = .pred_class) |>
   autoplot(type = "heatmap") 
