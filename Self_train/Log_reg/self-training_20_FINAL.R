@@ -124,27 +124,28 @@ lr_preds_all <- covid_df |>
   bind_cols(predict(lr_final_fit, covid_df, type = "prob"))
 # stopCluster(cluster)
 
-lr_preds_all_filtered <- lr_preds_all |>
-  filter(.pred_misinfo > 0.99 | .pred_non.misinfo > 0.99)
+# lr_preds_all_filtered <- lr_preds_all |>
+#   filter(.pred_misinfo > 0.99 | .pred_non.misinfo > 0.99)
+# 
 
-lr_preds_all_filtered_label <- lr_preds_all_filtered |>
+lr_preds_all_filtered_label <- lr_preds_all |>
   mutate(label = case_when(
-    .pred_misinfo > 0.99 ~ "misinfo",
-    .pred_non.misinfo > 0.99 ~ "non.misinfo"
+    .pred_misinfo > 0.9 ~ "misinfo",
+    .pred_non.misinfo > 0.1 ~ "non.misinfo"
   ))
 
-lr_preds_all_filtered_label <- lr_preds_all_filtered_label |>
-  select(tweet, label, id)
+# lr_preds_all_filtered_label <- lr_preds_all_filtered_label |>
+#   select(tweet, label, id)
 
 lr_preds_all_filtered_label |>
-  count(label) # misinfo = 27024, nonmisinfo = 313651
+  count(label) # misinfo = 58688, nonmisinfo = 599568
 
-covid_predicted <- full_join(lr_preds_all_filtered_label, covid, by = "id") |>
-  mutate(label = coalesce(label.x, label.y),
-         tweet = coalesce(tweet.x, tweet.y)) |>
-  select(tweet, label, id)
+# covid_predicted <- full_join(lr_preds_all_filtered_label, covid, by = "id") |>
+#   mutate(label = coalesce(label.x, label.y),
+#          tweet = coalesce(tweet.x, tweet.y)) |>
+#   select(tweet, label, id)
+# 
+# covid_predicted |>
+#   count(label)
 
-covid_predicted |>
-  count(label) # misinfo = 28854, nonmisinfo = 324018
-
-saveRDS(covid_predicted, "E:/Data/Training samples/st_log_reg/misinformation_class_FINISHED.RDS")
+saveRDS(lr_preds_all_filtered_label, "E:/Data/Training samples/st_log_reg/misinformation_class_FINISHED.RDS")
