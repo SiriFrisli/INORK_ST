@@ -29,7 +29,7 @@ no_we <- no_we |>
   as_tibble()
 
 ################################################################################
-covid <- readRDS("~/INORK/Self_train/Log_reg/Results/misinformation_class_1.RDS")
+covid <- readRDS("D:/Data/Training samples/st_log_reg/misinformation_class_1.RDS")
 
 stopwords <- read_xlsx("~/INORK/stopwords.xlsx")
 custom_words <- stopwords |>

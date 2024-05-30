@@ -7,7 +7,7 @@
 
 packages <- c("tidyverse", "tidymodels", "readxl", "ROSE", "recipes", "textrecipes",
               "e1071", "caret", "glmnet", "spacyr", "textdata", "xgboost", "data.table",
-              "foreach", "doParallel")
+              "foreach", "doParallel", "writexl")
 
 for (package in packages) {
   if (!require(package, character.only = TRUE)) {
@@ -128,17 +128,23 @@ lr_preds_all <- covid_df |>
 #   filter(.pred_misinfo > 0.99 | .pred_non.misinfo > 0.99)
 # 
 
-lr_preds_all_filtered_label <- lr_preds_all |>
+lr_preds_all_filtered_label <- lr_preds_all_filtered_label |>
   mutate(label = case_when(
-    .pred_misinfo > 0.9 ~ "misinfo",
-    .pred_non.misinfo > 0.1 ~ "non.misinfo"
+    .pred_misinfo > 0.95 ~ "misinfo",
+    .pred_non.misinfo > 0.05 ~ "non.misinfo"
   ))
 
 # lr_preds_all_filtered_label <- lr_preds_all_filtered_label |>
 #   select(tweet, label, id)
 
+# with 0.9 thresh:
 lr_preds_all_filtered_label |>
   count(label) # misinfo = 58688, nonmisinfo = 599568
+
+# with 0.95 thresh:
+lr_preds_all_filtered_label |>
+  count(label) # misinfo = 46602, nonmisinfo = 611654
+
 
 # covid_predicted <- full_join(lr_preds_all_filtered_label, covid, by = "id") |>
 #   mutate(label = coalesce(label.x, label.y),
@@ -148,4 +154,17 @@ lr_preds_all_filtered_label |>
 # covid_predicted |>
 #   count(label)
 
-saveRDS(lr_preds_all_filtered_label, "E:/Data/Training samples/st_log_reg/misinformation_class_FINISHED.RDS")
+saveRDS(lr_preds_all_filtered_label, "D:/Data/misinformation_class_FINISHED_95.RDS")
+
+# Also extract random 1000 tweets to manually label, to look at the interrater agreement
+
+set.seed(1234)
+covid_sample <- covid |>
+  sample_n(300)
+
+covid_sample_few <- covid_sample |>
+  select(tweet, id, created_at)
+
+covid_sample_few <- covid_sample_few[order(covid_sample_few$created_at, decreasing = TRUE),]
+
+write_xlsx(covid_sample_few, "D:/Data/Training samples/misinformation_labeled_sample.xlsx", col_names = TRUE)
