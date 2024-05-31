@@ -247,3 +247,39 @@ out_unnest <- out_unnest[!duplicated(out_unnest[c(1,3)]),]
 covid_url <- left_join(covid_short, out_unnest, by = c("id", "text", "expanded_url")) 
 
 saveRDS(covid_url, "D:/Data/covid_long_urls.RDS")
+
+################################################################################
+## Adding the new long links to the actual dataset
+
+covid_long <- readRDS("D:/Data/covid_long_urls.RDS")
+covid <- readRDS("D:/Data/covid_relevant_nort_domain.RDS") # domain name in the dom_url column
+
+covid_long_dom <- sapply(covid_long$url, function (i) {
+  x <- url_parse(i)
+  c(x$domain)
+})
+
+covid_long_dom <- data.frame(dom_url=covid_long_dom,
+                            id=covid_long$id)
+
+covid_long_dom$dom_url <- str_remove_all(covid_long_dom$dom_url, "www.")
+
+covid_long_dom_count <- covid_long_dom |>
+  count(dom_url)
+
+covid_long_dom <- covid_long_dom |>
+  rowid_to_column("id2")
+
+covid_long <- covid_long |>
+  rowid_to_column("id2")
+
+covid_expanded <- covid_long_dom |>
+  merge(covid_long, by = "id2") |>
+  select(text, id = id.x, expanded_url, url, dom_url)
+
+covid_fin <- left_join(covid, covid_expanded, by = c("id")) |>
+  mutate(dom_url = coalesce(dom_url.y, dom_url.x),
+         text = coalesce(text.x, text.y)) |>
+  select(-c(dom_url.x, dom_url.y, text.x, text.y, expanded_url, url))
+
+saveRDS(covid_fin, "D:/Data/covid_relevant_nort_domain.RDS")
